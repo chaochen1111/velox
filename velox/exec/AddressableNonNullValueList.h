@@ -53,6 +53,20 @@ class AddressableNonNullValueList {
       vector_size_t index,
       HashStringAllocator* allocator);
 
+  /// Append a non-null value to the end of the list. Returns a pair of
+  /// 'index' that can be used to access the value later and the size of the
+  /// value appended.
+  std::pair<HashStringAllocator::Position, size_t> appendWithSize(
+      const DecodedVector& decoded,
+      vector_size_t index,
+      HashStringAllocator* allocator);
+
+  /// Append a non-null serialized (hash + value) to the end of the list.
+  /// Returns position that can be used to access the value later.
+  std::pair<HashStringAllocator::Position, size_t> appendSerialized(
+      const StringView& value,
+      HashStringAllocator* allocator);
+
   /// Removes last element. 'position' must be a value returned from the latest
   /// call to 'append'.
   void removeLast(HashStringAllocator::Position position) {
@@ -80,6 +94,10 @@ class AddressableNonNullValueList {
       BaseVector& result,
       vector_size_t index);
 
+  /// Copies numBytes at position to 'dest'. The copy includes the hash.
+  static void
+  copy(HashStringAllocator::Position position, void* dest, size_t numBytes);
+
   void free(HashStringAllocator& allocator) {
     if (size_ > 0) {
       allocator.free(firstHeader_);
@@ -87,6 +105,8 @@ class AddressableNonNullValueList {
   }
 
  private:
+  void initStream(ByteOutputStream& stream, HashStringAllocator* allocator);
+
   // Memory allocation (potentially multi-part).
   HashStringAllocator::Header* firstHeader_{nullptr};
   HashStringAllocator::Position currentPosition_{nullptr, nullptr};
