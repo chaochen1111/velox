@@ -119,10 +119,11 @@ class UpperLowerTemplateFunction : public exec::VectorFunction {
   }
 
   static std::vector<std::shared_ptr<exec::FunctionSignature>> signatures() {
-    // varchar -> varchar
+    // varchar(x) -> varchar(x)
     return {exec::FunctionSignatureBuilder()
-                .returnType("varchar")
-                .argumentType("varchar")
+                .integerVariable("x")
+                .returnType("varchar(x)")
+                .argumentType("varchar(x)")
                 .build()};
   }
 

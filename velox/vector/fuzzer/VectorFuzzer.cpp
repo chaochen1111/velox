@@ -1088,6 +1088,11 @@ TypePtr randType(
   }
 }
 
+TypePtr randVarcharType(FuzzerGenerator& rng) {
+  int32_t maxLength = 1 + rand<int32_t>(rng) % 65535;
+  return VARCHAR(maxLength);
+}
+
 RowTypePtr randRowType(FuzzerGenerator& rng, int maxDepth) {
   return randRowType(rng, defaultScalarTypes(), maxDepth);
 }

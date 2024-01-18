@@ -27,6 +27,13 @@ TypePtr typeFromString(
     const std::string& type,
     bool failIfNotRegistered = true);
 
+/// Normalize Presto types such as INT and DOUBLE PRECISION and convert to Velox
+/// type.
+TypePtr variableTypeFromString(
+    const std::string& type,
+    const int32_t& maxLength,
+    bool failIfNotRegistered = true);
+
 /// Convert words with spaces to a Velox type.
 /// First check if all the words are a Velox type.
 /// Then check if the first word is a field name and the remaining words are a

@@ -249,6 +249,23 @@ class CastExpr : public SpecialForm {
       exec::EvalCtx& context,
       const TypePtr& fromType);
 
+  template <TypeKind FromKind, bool Truncate, bool LegacyCast>
+  void applyVarcharCastKernel(
+    vector_size_t row,
+    EvalCtx& context,
+    const int32_t& maxLength,
+    const SimpleVector<typename TypeTraits<FromKind>::NativeType>* input,
+    FlatVector<typename velox::StringView>* result);
+
+  template <TypeKind FromKind>
+  void applyPrimitivesToVarcharCast(
+      const TypePtr& fromType,
+      const TypePtr& toType,
+      const SelectivityVector& rows,
+      exec::EvalCtx& context,
+      const BaseVector& input,
+      VectorPtr& result);
+
   template <TypeKind ToKind>
   void applyCastPrimitivesDispatch(
       const TypePtr& fromType,

@@ -82,10 +82,18 @@ static const std::vector<std::string> kFloatingPointTypes{"real", "double"};
 facebook::velox::exec::FunctionSignaturePtr makeCastSignature(
     const std::string& fromType,
     const std::string& toType) {
-  return facebook::velox::exec::FunctionSignatureBuilder()
-      .argumentType(fromType)
-      .returnType(toType)
-      .build();
+//  if (toType == std::string("varchar")) {
+//    return facebook::velox::exec::FunctionSignatureBuilder()
+//        .argumentType(fromType)
+//        .integerVariable("max_length")
+//        .returnType("VARCHAR(max_length)")
+//        .build();
+//  } else {
+    return facebook::velox::exec::FunctionSignatureBuilder()
+        .argumentType(fromType)
+        .returnType(toType)
+        .build();
+//  }
 }
 
 void addCastFromIntegralSignatures(

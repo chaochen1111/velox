@@ -579,7 +579,18 @@ void CastExpr::applyPeeled(
             fromType,
             toType);
     }
-  } else {
+  } else if (toType->isVarchar()) {
+       VELOX_DYNAMIC_SCALAR_TYPE_DISPATCH(
+            applyPrimitivesToVarcharCast,
+            fromType->kind(),
+            fromType,
+            toType,
+            rows,
+            context,
+            input,
+            result);
+  }
+  else {
     switch (toType->kind()) {
       case TypeKind::MAP:
         result = applyMap(

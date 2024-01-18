@@ -247,6 +247,56 @@ void CastExpr::applyCastKernel(
   }
 }
 
+/// The per-row level Kernel
+/// @tparam ToKind The cast target type
+/// @tparam FromKind The expression type
+/// @param row The index of the current row
+/// @param input The input vector (of type FromKind)
+/// @param result The output vector (of type ToKind)
+template <TypeKind FromKind, bool Truncate, bool LegacyCast>
+void CastExpr::applyVarcharCastKernel(
+    vector_size_t row,
+    EvalCtx& context,
+    const int32_t& maxLength,
+    const SimpleVector<typename TypeTraits<FromKind>::NativeType>* input,
+    FlatVector<typename velox::StringView>* result) {
+  auto setError = [&](const std::string& details) {
+    if (setNullInResultAtError()) {
+      result->setNull(row, true);
+    } else {
+      context.setVeloxExceptionError(
+          row, makeBadCastException(result->type(), *input, row, details));
+    }
+  };
+
+  try {
+    auto inputRowValue = input->valueAt(row);
+
+    //auto output = util::Converter<ToKind, void, Truncate, LegacyCast>::cast(
+    //    inputRowValue);
+
+    auto output = util::Converter<TypeKind::VARCHAR, void, Truncate, LegacyCast>::cast(
+        inputRowValue);
+
+    // Write the result output to the output vector
+    auto writer = exec::StringWriter<>(result, row);
+    if (output.size() > maxLength) {
+      writer.copy_from(output.substr(0, maxLength));
+    } else {
+      writer.copy_from(output);
+    }
+    writer.finalize();
+
+  } catch (const VeloxException& ue) {
+    if (!ue.isUserError()) {
+      throw;
+    }
+    setError(ue.message());
+  } catch (const std::exception& e) {
+    setError(e.what());
+  }
+}
+
 template <typename TInput, typename TOutput>
 void CastExpr::applyDecimalCastKernel(
     const SelectivityVector& rows,
@@ -559,6 +609,27 @@ void CastExpr::applyCastPrimitives(
       }
     }
   }
+}
+
+template <TypeKind FromKind>
+void CastExpr::applyPrimitivesToVarcharCast(
+    const TypePtr& fromType,
+    const TypePtr& toType,
+    const SelectivityVector& rows,
+    exec::EvalCtx& context,
+    const BaseVector& input,
+    VectorPtr& result) {
+  context.ensureWritable(rows, toType, result);
+
+  using From = typename TypeTraits<FromKind>::NativeType;
+  auto* resultFlatVector = result->as<FlatVector<velox::StringView>>();
+  auto* inputSimpleVector = input.as<SimpleVector<From>>();
+  auto maxLength = getVarcharMaxLength(*toType);
+
+  applyToSelectedNoThrowLocal(context, rows, result, [&](int row) {
+     applyVarcharCastKernel<FromKind, true /*truncate*/, true /*legacy*/>(
+         row, context, maxLength, inputSimpleVector, resultFlatVector);
+  });
 }
 
 template <TypeKind ToKind>

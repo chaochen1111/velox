@@ -96,6 +96,7 @@ std::ostream& operator<<(std::ostream& os, const TypeKind& kind);
 
 template <TypeKind KIND>
 class ScalarType;
+class VarcharType;
 class ShortDecimalType;
 class LongDecimalType;
 class ArrayType;
@@ -234,7 +235,8 @@ struct TypeTraits<TypeKind::DOUBLE> {
 
 template <>
 struct TypeTraits<TypeKind::VARCHAR> {
-  using ImplType = ScalarType<TypeKind::VARCHAR>;
+  //using ImplType = ScalarType<TypeKind::VARCHAR>;
+  using ImplType = VarcharType;
   using NativeType = velox::StringView;
   using DeepCopiedType = std::string;
   static constexpr uint32_t minSubTypes = 0;
@@ -533,7 +535,7 @@ class Type : public Tree<const TypePtr>, public velox::ISerializable {
   VELOX_FLUENT_CAST(Hugeint, HUGEINT)
   VELOX_FLUENT_CAST(Real, REAL)
   VELOX_FLUENT_CAST(Double, DOUBLE)
-  VELOX_FLUENT_CAST(Varchar, VARCHAR)
+  //VELOX_FLUENT_CAST(Varchar, VARCHAR)
   VELOX_FLUENT_CAST(Varbinary, VARBINARY)
   VELOX_FLUENT_CAST(Timestamp, TIMESTAMP)
   VELOX_FLUENT_CAST(Array, ARRAY)
@@ -543,8 +545,10 @@ class Type : public Tree<const TypePtr>, public velox::ISerializable {
   VELOX_FLUENT_CAST(UnKnown, UNKNOWN)
   VELOX_FLUENT_CAST(Function, FUNCTION)
 
+  const VarcharType& asVarchar() const;
   const ShortDecimalType& asShortDecimal() const;
   const LongDecimalType& asLongDecimal() const;
+  bool isVarchar() const;
   bool isShortDecimal() const;
   bool isLongDecimal() const;
   bool isDecimal() const;
@@ -801,6 +805,82 @@ class UnknownType : public TypeBase<TypeKind::UNKNOWN> {
     return obj;
   }
 };
+
+class VarcharType : public ScalarType<TypeKind::VARCHAR> {
+ public:
+   static const int32_t kVarcharUnboundedLength = -1;
+
+   explicit VarcharType(const int32_t maxLength = kVarcharUnboundedLength)
+      : parameters_{TypeParameter(maxLength)} {
+    if (maxLength != kVarcharUnboundedLength) {
+      VELOX_CHECK_GT(
+          maxLength,
+          0,
+          "Maximum length of varchar type must be greater than 0");
+    }
+  }
+
+  FOLLY_NOINLINE static const std::shared_ptr<const VarcharType> create() {
+    return std::make_shared<const VarcharType>();
+  }
+
+  FOLLY_NOINLINE static const std::shared_ptr<const VarcharType> create(int32_t maxLength) {
+    return std::make_shared<const VarcharType>(maxLength);
+  }
+
+  inline int32_t maxLength() const {
+    return parameters_[0].longLiteral.value();
+  }
+
+  inline bool equivalent(const Type& other) const override {
+    if (!Type::hasSameTypeId(other)) {
+      return false;
+    }
+    const auto& otherVarchar = static_cast<const VarcharType&>(other);
+    return (
+        otherVarchar.maxLength() == maxLength());
+  }
+
+  const char* name() const override {
+    return "VARCHAR";
+  }
+
+  std::string toString() const override {
+    if (maxLength() == kVarcharUnboundedLength) {
+      return std::string(name());
+    }
+    return fmt::format("VARCHAR({})", maxLength());
+  }
+
+  folly::dynamic serialize() const override {
+    auto obj = ScalarType<TypeKind::VARCHAR>::serialize();
+    obj["type"] = name();
+    obj["maxLength"] = maxLength();
+    return obj;
+  }
+
+  const std::vector<TypeParameter>& parameters() const override {
+    return parameters_;
+  }
+
+ private:
+  const std::vector<TypeParameter> parameters_;
+};
+
+
+FOLLY_ALWAYS_INLINE const VarcharType& Type::asVarchar() const {
+  return dynamic_cast<const VarcharType&>(*this);
+}
+
+FOLLY_ALWAYS_INLINE bool Type::isVarchar() const {
+  return dynamic_cast<const VarcharType*>(this) != nullptr;
+}
+
+FOLLY_ALWAYS_INLINE bool isVarcharName(const std::string& name) {
+  return (name == "VARCHAR");
+}
+
+int32_t getVarcharMaxLength(const Type& type);
 
 class ArrayType : public TypeBase<TypeKind::ARRAY> {
  public:
@@ -1130,7 +1210,7 @@ using HugeintType = ScalarType<TypeKind::HUGEINT>;
 using RealType = ScalarType<TypeKind::REAL>;
 using DoubleType = ScalarType<TypeKind::DOUBLE>;
 using TimestampType = ScalarType<TypeKind::TIMESTAMP>;
-using VarcharType = ScalarType<TypeKind::VARCHAR>;
+//using VarcharType = ScalarType<TypeKind::VARCHAR>;
 using VarbinaryType = ScalarType<TypeKind::VARBINARY>;
 
 constexpr long kMillisInSecond = 1000;
@@ -1661,8 +1741,11 @@ VELOX_SCALAR_ACCESSOR(HUGEINT);
 VELOX_SCALAR_ACCESSOR(REAL);
 VELOX_SCALAR_ACCESSOR(DOUBLE);
 VELOX_SCALAR_ACCESSOR(TIMESTAMP);
-VELOX_SCALAR_ACCESSOR(VARCHAR);
+//VELOX_SCALAR_ACCESSOR(VARCHAR);
 VELOX_SCALAR_ACCESSOR(VARBINARY);
+
+std::shared_ptr<const VarcharType> VARCHAR();
+std::shared_ptr<const VarcharType> VARCHAR(int32_t maxLength);
 
 TypePtr UNKNOWN();
 
@@ -2049,25 +2132,61 @@ struct CppToType<uint8_t> : public CppToTypeBase<TypeKind::TINYINT> {};
 template <>
 struct CppToType<bool> : public CppToTypeBase<TypeKind::BOOLEAN> {};
 
-template <>
-struct CppToType<Varchar> : public CppToTypeBase<TypeKind::VARCHAR> {};
 
+//struct CppToType<Varchar> : public CppToTypeBase<TypeKind::VARCHAR> {};
 template <>
-struct CppToType<folly::StringPiece> : public CppToTypeBase<TypeKind::VARCHAR> {
+struct CppToType<Varchar> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
 };
 
+//template <>
+//struct CppToType<folly::StringPiece> : public CppToTypeBase<TypeKind::VARCHAR> {
+//};
 template <>
-struct CppToType<velox::StringView> : public CppToTypeBase<TypeKind::VARCHAR> {
+struct CppToType<folly::StringPiece> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
 };
 
+//template <>
+//struct CppToType<velox::StringView> : public CppToTypeBase<TypeKind::VARCHAR> {
+//};
 template <>
-struct CppToType<std::string_view> : public CppToTypeBase<TypeKind::VARCHAR> {};
+struct CppToType<velox::StringView> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
+};
 
+//template <>
+//struct CppToType<std::string_view> : public CppToTypeBase<TypeKind::VARCHAR> {};
 template <>
-struct CppToType<std::string> : public CppToTypeBase<TypeKind::VARCHAR> {};
+struct CppToType<std::string_view> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
+};
 
+//template <>
+//struct CppToType<std::string> : public CppToTypeBase<TypeKind::VARCHAR> {};
 template <>
-struct CppToType<const char*> : public CppToTypeBase<TypeKind::VARCHAR> {};
+struct CppToType<std::string> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
+};
+
+//template <>
+//struct CppToType<const char*> : public CppToTypeBase<TypeKind::VARCHAR> {};
+template <>
+struct CppToType<const char*> : public TypeTraits<TypeKind::VARCHAR> {
+  static auto create() {
+    return VARCHAR();
+  }
+};
 
 template <>
 struct CppToType<Varbinary> : public CppToTypeBase<TypeKind::VARBINARY> {};

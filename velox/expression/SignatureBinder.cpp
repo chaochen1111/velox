@@ -35,6 +35,18 @@ bool isPositiveInteger(const std::string& str) {
       }) == str.end();
 }
 
+bool isPrimitiveType(const std::string& baseTypeName) {
+  auto primitiveTypeNameList = primitiveTypeNames();
+  for (auto type : primitiveTypeNameList) {
+    auto upperTypeName = boost::algorithm::to_upper_copy(baseTypeName);
+    auto upperPrimitiveType = boost::algorithm::to_upper_copy(type);
+    if (upperTypeName == upperPrimitiveType) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::string buildCalculation(
     const std::string& variable,
     const std::string& calculation) {
@@ -205,6 +217,12 @@ bool SignatureBinderBase::tryBind(
   const auto& params = typeSignature.parameters();
   // Type Parameters can recurse.
   if (params.size() != actualType->parameters().size()) {
+    // Type coercion on binding from parameterized varchar
+    // to "unparameterized" varchar signature.
+    if (actualType->isVarchar() &&
+        params.size() < actualType->parameters().size()) {
+      return true;
+    }
     return false;
   }
 

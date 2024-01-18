@@ -371,6 +371,8 @@ TypePtr randType(
     const std::vector<TypePtr>& scalarTypes,
     int maxDepth = 5);
 
+TypePtr randVarcharType(FuzzerGenerator& rng);
+
 /// Generates a random ROW type.
 RowTypePtr randRowType(FuzzerGenerator& rng, int maxDepth = 5);
 
